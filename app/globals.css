@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #000000;
+  --radius-apple: 20px;
+}
+
+@layer base {
+  body {
+    @apply bg-black text-white selection:bg-white selection:text-black;
+  }
+}
+
+.glass {
+  @apply bg-white/5 backdrop-blur-xl border border-white/10;
+}
+
+.apple-button {
+  @apply px-6 py-3 rounded-full bg-white text-black font-medium transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50;
+}
