@@ -43,9 +43,9 @@ export default function SplashScreen({ onComplete }: { onComplete: () => void })
             <motion.path
               d={starPath}
               fill="black"
-              initial={{ scale: 1, rotate: 0, x: 0, y: 0 }} // x,y will be handled by transform-origin
-              animate={phase === 'expanding' ? { scale: 50, rotate: 180 } : { scale: 1, rotate: 0 }}
-              transition={phase === 'expanding' ? { duration: 1.5, ease: [0.7, 0, 0.3, 1] } : {}}
+              initial={{ scale: 1, rotate: 0, x: 0, y: 0 }} 
+              animate={phase === 'expanding' ? { scale: 60, rotate: 90 } : { scale: 1, rotate: 0 }}
+              transition={phase === 'expanding' ? { duration: 1.2, ease: [0.65, 0, 0.35, 1] } : {}}
               style={{ 
                 transformBox: 'fill-box', 
                 transformOrigin: 'center' 
@@ -75,14 +75,15 @@ export default function SplashScreen({ onComplete }: { onComplete: () => void })
           {phase === 'loading' && (
             <motion.div
               key="colorful-star"
-              initial={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 5, opacity: 0 }} // Scale up slightly and fade out
-              transition={{ duration: 0.8, ease: "easeIn" }}
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 1.5, opacity: 0 }}
+              transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }} // Apple-style spring curve
               className="w-32 h-32 md:w-48 md:h-48"
             >
               <motion.div
                 animate={{ rotate: 360 }}
-                transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
                 className="w-full h-full"
               >
                 <svg viewBox="0 0 100 100" className="w-full h-full">
@@ -98,7 +99,6 @@ export default function SplashScreen({ onComplete }: { onComplete: () => void })
                   <path
                     d={starPath}
                     fill="url(#gemini-gradient)"
-                    className="drop-shadow-[0_0_25px_rgba(66,133,244,0.6)]"
                   />
                 </svg>
               </motion.div>
