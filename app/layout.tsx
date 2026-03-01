@@ -17,6 +17,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="bg-black text-white antialiased dark">
+      <head>
+        <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+      </head>
       <body className={inter.className} suppressHydrationWarning>
         {children}
       </body>

@@ -8,7 +8,28 @@ import React, {
   useRef,
   useCallback,
 } from 'react';
-import type { Peer as PeerType, DataConnection } from 'peerjs';
+// Remove npm import
+// import type { Peer as PeerType, DataConnection } from 'peerjs';
+
+// Define minimal types for PeerJS since we are using CDN
+interface PeerType {
+  id: string;
+  disconnected: boolean;
+  destroyed: boolean;
+  on: (event: string, callback: any) => void;
+  connect: (id: string, options?: any) => DataConnection;
+  reconnect: () => void;
+  destroy: () => void;
+  disconnect: () => void;
+}
+
+interface DataConnection {
+  peer: string;
+  open: boolean;
+  on: (event: string, callback: any) => void;
+  send: (data: any) => void;
+  close: () => void;
+}
 
 interface PeerDevice {
   id: string;
@@ -92,7 +113,7 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
       setPeers((prev) => prev.filter((p) => p.id !== conn.peer));
     });
 
-    conn.on('error', (err) => {
+    conn.on('error', (err: any) => {
       console.warn('Connection error:', err);
       delete connections.current[conn.peer];
       setPeers((prev) => prev.filter((p) => p.id !== conn.peer));
@@ -113,11 +134,17 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
     const MAX_ATTEMPTS = 3;
 
     const init = async () => {
-      const { Peer } = await import('peerjs');
-      if (isDestroyed.current) return;
+      // Use window.Peer from CDN
+      // const { Peer } = await import('peerjs');
+      const Peer = (window as any).Peer;
+
+      if (isDestroyed.current || !Peer) {
+        console.error('PeerJS library not loaded');
+        return;
+      }
 
       // ★ ID verme — PeerJS kendi üretsin, çakışma olmaz
-      const peer = new Peer({
+      const peer = new Peer(undefined, {
         debug: 0, // sessiz
         config: {
           iceServers: [
@@ -130,7 +157,7 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
 
       peerInstance.current = peer;
 
-      peer.on('open', (id) => {
+      peer.on('open', (id: string) => {
         console.log('✅ Connected — ID:', id);
         setMyId(id);
         setConnectionStatus('connected');
@@ -179,7 +206,7 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
         setConnectionStatus('error');
       });
 
-      peer.on('connection', (conn) => {
+      peer.on('connection', (conn: DataConnection) => {
         setupConnection(conn);
       });
 
@@ -230,7 +257,7 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
             10000
           );
           conn.on('open', () => { clearTimeout(timeout); resolve(); });
-          conn.on('error', (e) => { clearTimeout(timeout); reject(e); });
+          conn.on('error', (e: any) => { clearTimeout(timeout); reject(e); });
         });
       }
 
