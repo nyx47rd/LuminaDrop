@@ -8,28 +8,6 @@ import React, {
   useRef,
   useCallback,
 } from 'react';
-// Remove npm import
-// import type { Peer as PeerType, DataConnection } from 'peerjs';
-
-// Define minimal types for PeerJS since we are using CDN
-interface PeerType {
-  id: string;
-  disconnected: boolean;
-  destroyed: boolean;
-  on: (event: string, callback: any) => void;
-  connect: (id: string, options?: any) => DataConnection;
-  reconnect: () => void;
-  destroy: () => void;
-  disconnect: () => void;
-}
-
-interface DataConnection {
-  peer: string;
-  open: boolean;
-  on: (event: string, callback: any) => void;
-  send: (data: any) => void;
-  close: () => void;
-}
 
 interface PeerDevice {
   id: string;
@@ -49,103 +27,109 @@ interface PeerContextType {
 
 const PeerContext = createContext<PeerContextType | null>(null);
 
+// ★★★ Render.com URL'ini buraya yaz ★★★
+const PEER_SERVER_HOST = 'https://lumina-peer.onrender.com';
+
+function waitForPeerJS(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if ((window as any).Peer) { resolve(); return; }
+    let waited = 0;
+    const check = setInterval(() => {
+      waited += 100;
+      if ((window as any).Peer) { clearInterval(check); resolve(); }
+      if (waited > 10000) { clearInterval(check); reject('PeerJS yüklenemedi'); }
+    }, 100);
+  });
+}
+
 export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
   const [peers, setPeers] = useState<PeerDevice[]>([]);
-  const [myId, setMyId] = useState<string>('');
+  const [myId, setMyId] = useState('');
   const [connectionStatus, setConnectionStatus] = useState<
     'connecting' | 'connected' | 'error'
   >('connecting');
   const [incomingFile, setIncomingFile] = useState<any>(null);
   const [transferProgress, setTransferProgress] = useState(0);
 
-  const peerInstance = useRef<PeerType | null>(null);
-  const connections = useRef<{ [key: string]: DataConnection }>({});
-  const isDestroyed = useRef(false);
+  const peer = useRef<any>(null);
+  const conns = useRef<Record<string, any>>({});
+  const destroyed = useRef(false);
 
-  const peerReadyPromise = useRef<Promise<void> | null>(null);
-  const peerReadyResolve = useRef<(() => void) | null>(null);
+  const setupConn = useCallback((conn: any) => {
+    let chunks: ArrayBuffer[] = [];
+    let meta: any = null;
 
-  const setupConnection = useCallback((conn: DataConnection) => {
-    let receivedChunks: ArrayBuffer[] = [];
-    let fileMeta: { name: string; size: number; type: string } | null = null;
-
-    conn.on('data', (data: unknown) => {
+    conn.on('data', (data: any) => {
       if (typeof data === 'string') {
         try {
           const parsed = JSON.parse(data);
           if (parsed.name && parsed.size !== undefined) {
-            fileMeta = parsed;
-            receivedChunks = [];
+            meta = parsed;
+            chunks = [];
           }
-        } catch {
-          // not json
-        }
+        } catch {}
       } else if (data instanceof ArrayBuffer) {
-        receivedChunks.push(data);
-        const receivedSize = receivedChunks.reduce(
-          (acc, chunk) => acc + chunk.byteLength,
-          0
-        );
-        if (fileMeta) {
-          setTransferProgress((receivedSize / fileMeta.size) * 100);
-          if (receivedSize >= fileMeta.size) {
-            const blob = new Blob(receivedChunks, { type: fileMeta.type });
-            const file = new File([blob], fileMeta.name, { type: fileMeta.type });
+        chunks.push(data);
+        const received = chunks.reduce((a: number, c: ArrayBuffer) => a + c.byteLength, 0);
+        if (meta) {
+          setTransferProgress((received / meta.size) * 100);
+          if (received >= meta.size) {
+            const blob = new Blob(chunks, { type: meta.type });
+            const file = new File([blob], meta.name, { type: meta.type });
             setIncomingFile({ file, from: conn.peer });
             setTransferProgress(0);
-            fileMeta = null;
-            receivedChunks = [];
+            meta = null;
+            chunks = [];
           }
         }
       }
     });
 
     conn.on('open', () => {
-      connections.current[conn.peer] = conn;
-      setPeers((prev) => [
-        ...prev.filter((p) => p.id !== conn.peer),
+      conns.current[conn.peer] = conn;
+      setPeers((p) => [
+        ...p.filter((x: PeerDevice) => x.id !== conn.peer),
         { id: conn.peer, name: `Device ${conn.peer.slice(0, 4)}` },
       ]);
     });
 
     conn.on('close', () => {
-      delete connections.current[conn.peer];
-      setPeers((prev) => prev.filter((p) => p.id !== conn.peer));
+      delete conns.current[conn.peer];
+      setPeers((p) => p.filter((x: PeerDevice) => x.id !== conn.peer));
     });
 
-    conn.on('error', (err: any) => {
-      console.warn('Connection error:', err);
-      delete connections.current[conn.peer];
-      setPeers((prev) => prev.filter((p) => p.id !== conn.peer));
+    conn.on('error', () => {
+      delete conns.current[conn.peer];
+      setPeers((p) => p.filter((x: PeerDevice) => x.id !== conn.peer));
     });
   }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    destroyed.current = false;
 
-    isDestroyed.current = false;
-
-    peerReadyPromise.current = new Promise<void>((resolve) => {
-      peerReadyResolve.current = resolve;
-    });
-
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    let attempts = 0;
-    const MAX_ATTEMPTS = 3;
+    let reconnectTimer: any = null;
 
     const init = async () => {
-      // Use window.Peer from CDN
-      // const { Peer } = await import('peerjs');
-      const Peer = (window as any).Peer;
-
-      if (isDestroyed.current || !Peer) {
-        console.error('PeerJS library not loaded');
+      try {
+        await waitForPeerJS();
+      } catch (e) {
+        console.error(e);
+        setConnectionStatus('error');
         return;
       }
 
-      // ★ ID verme — PeerJS kendi üretsin, çakışma olmaz
-      const peer = new Peer(undefined, {
-        debug: 0, // sessiz
+      if (destroyed.current) return;
+
+      const PeerClass = (window as any).Peer;
+
+      // ★★★ KENDİ SUNUCUNA BAĞLAN ★★★
+      const p = new PeerClass(undefined, {
+        host: PEER_SERVER_HOST,
+        port: 443,
+        path: '/',
+        secure: true,
+        debug: 0,
         config: {
           iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
@@ -155,68 +139,41 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
         },
       });
 
-      peerInstance.current = peer;
+      peer.current = p;
 
-      peer.on('open', (id: string) => {
-        console.log('✅ Connected — ID:', id);
+      p.on('open', (id: string) => {
+        console.log('✅ Peer ID:', id);
         setMyId(id);
         setConnectionStatus('connected');
-        attempts = 0;
-        peerReadyResolve.current?.();
       });
 
-      peer.on('error', (err: any) => {
-        console.error('PeerJS error:', err.type);
+      p.on('connection', (conn: any) => setupConn(conn));
 
-        if (err.type === 'peer-unavailable') {
-          // hedef peer yok, ölümcül değil
-          return;
-        }
-
-        // network/server hataları — disconnected event zaten gelir
-      });
-
-      peer.on('disconnected', () => {
+      p.on('disconnected', () => {
         setConnectionStatus('connecting');
-
-        if (isDestroyed.current || peer.destroyed) return;
-        if (attempts >= MAX_ATTEMPTS) {
-          console.error('❌ Bağlantı kurulamadı, yeniden oluşturuluyor...');
-          // Eski peer'ı yık, sıfırdan oluştur
-          peer.destroy();
-          attempts = 0;
-          reconnectTimer = setTimeout(() => {
-            if (!isDestroyed.current) init();
-          }, 3000);
-          return;
-        }
-
-        attempts++;
-        const delay = 2000 * attempts;
-        console.log(`🔄 Reconnect ${attempts}/${MAX_ATTEMPTS} in ${delay}ms`);
+        if (destroyed.current || p.destroyed) return;
 
         reconnectTimer = setTimeout(() => {
-          if (!isDestroyed.current && !peer.destroyed && peer.disconnected) {
-            peer.reconnect();
+          if (!destroyed.current && !p.destroyed && p.disconnected) {
+            p.reconnect();
           }
-        }, delay);
+        }, 3000);
       });
 
-      peer.on('close', () => {
-        setConnectionStatus('error');
+      p.on('error', (err: any) => {
+        console.warn('PeerJS:', err.type, err.message || '');
+        if (err.type === 'peer-unavailable') return;
       });
 
-      peer.on('connection', (conn: DataConnection) => {
-        setupConnection(conn);
-      });
+      p.on('close', () => setConnectionStatus('error'));
 
-      // Hash ile otomatik bağlantı
+      // Hash ile bağlan
       const hash = window.location.hash.replace('#', '');
       if (hash) {
-        peerReadyPromise.current?.then(() => {
-          if (hash !== peer.id && !peer.destroyed) {
-            const conn = peer.connect(hash, { reliable: true });
-            setupConnection(conn);
+        p.on('open', () => {
+          if (hash !== p.id) {
+            const c = p.connect(hash, { reliable: true });
+            setupConn(c);
           }
         });
       }
@@ -225,66 +182,62 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
     init();
 
     return () => {
-      isDestroyed.current = true;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      peerInstance.current?.destroy();
-      peerInstance.current = null;
+      destroyed.current = true;
+      clearTimeout(reconnectTimer);
+      peer.current?.destroy();
+      peer.current = null;
     };
-  }, [setupConnection]);
+  }, [setupConn]);
 
   const connectToPeer = useCallback(
     (peerId: string) => {
-      if (!peerInstance.current || peerId === myId) return;
-      if (connections.current[peerId]) return;
-      const conn = peerInstance.current.connect(peerId, { reliable: true });
-      setupConnection(conn);
+      if (!peer.current || peerId === myId || conns.current[peerId]) return;
+      const conn = peer.current.connect(peerId, { reliable: true });
+      setupConn(conn);
     },
-    [myId, setupConnection]
+    [myId, setupConn]
   );
 
   const sendFile = useCallback(
     async (to: string, file: File) => {
-      let conn = connections.current[to];
+      let conn = conns.current[to];
 
       if (!conn || !conn.open) {
-        if (!peerInstance.current) return;
-        conn = peerInstance.current.connect(to, { reliable: true });
-        setupConnection(conn);
+        if (!peer.current) return;
+        conn = peer.current.connect(to, { reliable: true });
+        setupConn(conn);
 
         await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(
-            () => reject(new Error('Timeout')),
-            10000
-          );
-          conn.on('open', () => { clearTimeout(timeout); resolve(); });
-          conn.on('error', (e: any) => { clearTimeout(timeout); reject(e); });
+          const t = setTimeout(() => reject('timeout'), 10000);
+          conn.on('open', () => { clearTimeout(t); resolve(); });
+          conn.on('error', (e: any) => { clearTimeout(t); reject(e); });
         });
       }
 
-      conn.send(
-        JSON.stringify({ name: file.name, size: file.size, type: file.type })
-      );
+      conn.send(JSON.stringify({
+        name: file.name, size: file.size, type: file.type,
+      }));
 
-      const chunkSize = 16384;
+      const CHUNK = 16384;
       let offset = 0;
 
-      const sendChunk = () => {
+      const next = () => {
         if (offset >= file.size) { setTransferProgress(0); return; }
-        const slice = file.slice(offset, offset + chunkSize);
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const buffer = e.target?.result as ArrayBuffer;
-          try { conn.send(buffer); } catch { setTransferProgress(0); return; }
-          offset += buffer.byteLength;
+        const slice = file.slice(offset, offset + CHUNK);
+        const r = new FileReader();
+        r.onload = (e) => {
+          const buf = e.target?.result as ArrayBuffer;
+          try { conn.send(buf); } catch { setTransferProgress(0); return; }
+          offset += buf.byteLength;
           setTransferProgress((offset / file.size) * 100);
-          if (offset < file.size) setTimeout(sendChunk, 0);
+          if (offset < file.size) setTimeout(next, 0);
           else setTransferProgress(0);
         };
-        reader.readAsArrayBuffer(slice);
+        r.readAsArrayBuffer(slice);
       };
-      sendChunk();
+      next();
     },
-    [setupConnection]
+    [setupConn]
   );
 
   return (
