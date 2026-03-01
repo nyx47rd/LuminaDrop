@@ -28,7 +28,7 @@ interface PeerContextType {
 const PeerContext = createContext<PeerContextType | null>(null);
 
 // ★★★ Render.com URL'ini buraya yaz ★★★
-const PEER_SERVER_HOST = 'https://lumina-peer.onrender.com';
+const PEER_SERVER_HOST = 'lumina-peer.onrender.com';
 
 function waitForPeerJS(): Promise<void> {
   return new Promise((resolve, reject) => {
