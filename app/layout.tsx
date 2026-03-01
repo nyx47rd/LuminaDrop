@@ -8,7 +8,9 @@ export const metadata: Metadata = {
   title: 'Lumina Drop',
   description: 'Minimalist P2P LAN file sharing.',
   icons: {
-    icon: '/icon.svg',
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+    ],
   },
 };
 
