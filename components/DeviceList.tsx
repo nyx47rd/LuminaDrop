@@ -3,11 +3,11 @@
 import React, { useState } from 'react';
 import { usePeers } from '@/hooks/use-peers';
 import { motion, AnimatePresence } from 'motion/react';
-import { Smartphone, Laptop, FileIcon, Download, X, Check, Share2, QrCode, ScanLine } from 'lucide-react';
+import { Smartphone, Laptop, FileIcon, Download, X, Check, Share2, QrCode, ScanLine, RefreshCw, AlertCircle } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 export default function DeviceList() {
-  const { peers, sendFile, transferProgress, incomingFile, setIncomingFile, myId, connectToPeer } = usePeers();
+  const { peers, sendFile, transferProgress, incomingFile, setIncomingFile, myId, connectToPeer, connectionStatus } = usePeers();
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [manualId, setManualId] = useState('');
@@ -29,6 +29,10 @@ export default function DeviceList() {
     }
   };
 
+  const handleRetry = () => {
+    window.location.reload();
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, peerId: string) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -46,22 +50,40 @@ export default function DeviceList() {
         >
           Lumina
         </motion.h1>
-        <motion.p 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 0.4 }}
-          transition={{ delay: 0.2 }}
-          className="text-xs uppercase tracking-widest mt-2"
-        >
-          Nearby Devices
-        </motion.p>
+        
+        {/* Connection Status Indicator */}
+        <div className="flex justify-center mt-4">
+          {connectionStatus === 'connecting' && (
+            <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest opacity-50">
+              <RefreshCw size={12} className="animate-spin" />
+              Connecting to Network...
+            </div>
+          )}
+          {connectionStatus === 'error' && (
+            <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-red-400">
+              <AlertCircle size={12} />
+              Connection Failed
+              <button onClick={handleRetry} className="underline hover:text-white ml-2">Retry</button>
+            </div>
+          )}
+          {connectionStatus === 'connected' && (
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.4 }}
+              className="text-xs uppercase tracking-widest"
+            >
+              Nearby Devices
+            </motion.p>
+          )}
+        </div>
         
         <div className="flex items-center justify-center gap-4 mt-6">
           <motion.button
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             onClick={handleShare}
-            disabled={!myId}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-[10px] uppercase tracking-widest disabled:opacity-50"
+            disabled={!myId || connectionStatus !== 'connected'}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-[10px] uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed"
           >
             {copied ? <Check size={12} /> : <Share2 size={12} />}
             {copied ? 'Copied' : 'Copy Link'}
@@ -71,8 +93,8 @@ export default function DeviceList() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             onClick={() => setShowQR(true)}
-            disabled={!myId}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-[10px] uppercase tracking-widest disabled:opacity-50"
+            disabled={!myId || connectionStatus !== 'connected'}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-[10px] uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <QrCode size={12} />
             Show QR
