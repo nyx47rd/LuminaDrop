@@ -58,11 +58,17 @@ export default function DeviceList() {
           {peers.length === 0 ? (
             <motion.div 
               initial={{ opacity: 0 }}
-              animate={{ opacity: 0.2 }}
+              animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="col-span-full py-20 text-center border-2 border-dashed border-black/10 rounded-[32px]"
+              className="col-span-full py-20 text-center flex flex-col items-center gap-4"
             >
-              Searching...
+              <div className="w-16 h-16 rounded-full border border-white/10 flex items-center justify-center animate-pulse">
+                <Smartphone size={32} strokeWidth={1} />
+              </div>
+              <p className="text-xs tracking-widest uppercase opacity-50">Scanning Network...</p>
+              <p className="text-[10px] opacity-30 max-w-[200px]">
+                Ensure devices are on the same Wi-Fi. If not found, use the &quot;Share Link&quot; button above.
+              </p>
             </motion.div>
           ) : (
             peers.map((peer) => (

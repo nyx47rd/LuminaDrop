@@ -86,7 +86,35 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
       setupConnection(conn);
     }
 
+    // Automatic Discovery Mechanism
+    const discoveryInterval = setInterval(async () => {
+      if (!peer.id || peer.destroyed) return;
+
+      try {
+        const response = await fetch('/api/discovery', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: peer.id }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          data.peers.forEach((p: PeerDevice) => {
+            // If we don't have a connection to this peer yet, connect
+            if (!connections.current[p.id]) {
+              console.log('Discovered peer:', p.id);
+              const conn = peer.connect(p.id);
+              setupConnection(conn);
+            }
+          });
+        }
+      } catch (err) {
+        console.error('Discovery failed:', err);
+      }
+    }, 3000);
+
     return () => {
+      clearInterval(discoveryInterval);
       peer.destroy();
     };
   }, [setupConnection, myId]);
