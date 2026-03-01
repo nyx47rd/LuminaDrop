@@ -11,6 +11,7 @@ interface PeerDevice {
 interface PeerContextType {
   peers: PeerDevice[];
   myId: string;
+  connectToPeer: (id: string) => void;
   sendFile: (to: string, file: File) => void;
   incomingFile: { file: File; from: string } | null;
   transferProgress: number;
@@ -82,42 +83,23 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
     // Handle room/lobby logic via URL hash if present
     const hash = window.location.hash.replace('#', '');
     if (hash && hash !== myId) {
-      const conn = peer.connect(hash);
-      setupConnection(conn);
+      // Wait a bit for the peer to be ready before connecting
+      setTimeout(() => {
+        const conn = peer.connect(hash);
+        setupConnection(conn);
+      }, 1000);
     }
 
-    // Automatic Discovery Mechanism
-    const discoveryInterval = setInterval(async () => {
-      if (!peer.id || peer.destroyed) return;
-
-      try {
-        const response = await fetch('/api/discovery', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: peer.id }),
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          data.peers.forEach((p: PeerDevice) => {
-            // If we don't have a connection to this peer yet, connect
-            if (!connections.current[p.id]) {
-              console.log('Discovered peer:', p.id);
-              const conn = peer.connect(p.id);
-              setupConnection(conn);
-            }
-          });
-        }
-      } catch (err) {
-        console.error('Discovery failed:', err);
-      }
-    }, 3000);
-
     return () => {
-      clearInterval(discoveryInterval);
       peer.destroy();
     };
   }, [setupConnection, myId]);
+
+  const connectToPeer = (peerId: string) => {
+    if (!peerInstance.current || peerId === myId) return;
+    const conn = peerInstance.current.connect(peerId);
+    setupConnection(conn);
+  };
 
   const sendFile = async (to: string, file: File) => {
     let conn = connections.current[to];
@@ -162,7 +144,7 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <PeerContext.Provider value={{ peers, myId, sendFile, incomingFile, transferProgress, setIncomingFile }}>
+    <PeerContext.Provider value={{ peers, myId, connectToPeer, sendFile, incomingFile, transferProgress, setIncomingFile }}>
       {children}
     </PeerContext.Provider>
   );

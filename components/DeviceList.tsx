@@ -3,18 +3,30 @@
 import React, { useState } from 'react';
 import { usePeers } from '@/hooks/use-peers';
 import { motion, AnimatePresence } from 'motion/react';
-import { Smartphone, Laptop, Monitor, FileIcon, Download, X, Check, Share2 } from 'lucide-react';
+import { Smartphone, Laptop, FileIcon, Download, X, Check, Share2, QrCode, ScanLine } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 
 export default function DeviceList() {
-  const { peers, sendFile, transferProgress, incomingFile, setIncomingFile, myId } = usePeers();
-  const [selectedPeer, setSelectedPeer] = useState<string | null>(null);
+  const { peers, sendFile, transferProgress, incomingFile, setIncomingFile, myId, connectToPeer } = usePeers();
   const [copied, setCopied] = useState(false);
+  const [showQR, setShowQR] = useState(false);
+  const [manualId, setManualId] = useState('');
+
+  const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}#${myId}` : '';
 
   const handleShare = () => {
-    const shareUrl = `${window.location.origin}${window.location.pathname}#${myId}`;
+    if (!myId) return;
     navigator.clipboard.writeText(shareUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleManualConnect = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (manualId) {
+      connectToPeer(manualId);
+      setManualId('');
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, peerId: string) => {
@@ -42,16 +54,68 @@ export default function DeviceList() {
         >
           Nearby Devices
         </motion.p>
-        <motion.button
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          onClick={handleShare}
-          className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-[10px] uppercase tracking-widest"
-        >
-          {copied ? <Check size={12} /> : <Share2 size={12} />}
-          {copied ? 'Copied' : 'Share Link'}
-        </motion.button>
+        
+        <div className="flex items-center justify-center gap-4 mt-6">
+          <motion.button
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            onClick={handleShare}
+            disabled={!myId}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-[10px] uppercase tracking-widest disabled:opacity-50"
+          >
+            {copied ? <Check size={12} /> : <Share2 size={12} />}
+            {copied ? 'Copied' : 'Copy Link'}
+          </motion.button>
+
+          <motion.button
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            onClick={() => setShowQR(true)}
+            disabled={!myId}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-[10px] uppercase tracking-widest disabled:opacity-50"
+          >
+            <QrCode size={12} />
+            Show QR
+          </motion.button>
+        </div>
       </header>
+
+      {/* QR Code Modal */}
+      <AnimatePresence>
+        {showQR && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+            onClick={() => setShowQR(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white p-8 rounded-[32px] flex flex-col items-center gap-6 max-w-sm w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-black text-center">
+                <h3 className="text-lg font-medium mb-1">Scan to Connect</h3>
+                <p className="text-xs opacity-50">Open camera on mobile device</p>
+              </div>
+              
+              <div className="p-4 bg-white rounded-xl border border-black/5 shadow-inner">
+                <QRCodeSVG value={shareUrl} size={200} />
+              </div>
+
+              <button 
+                onClick={() => setShowQR(false)}
+                className="w-full py-3 rounded-full bg-black text-white text-sm font-medium hover:scale-[1.02] transition-transform"
+              >
+                Close
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <AnimatePresence mode="popLayout">
@@ -60,15 +124,44 @@ export default function DeviceList() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="col-span-full py-20 text-center flex flex-col items-center gap-4"
+              className="col-span-full py-12 text-center flex flex-col items-center gap-6"
             >
               <div className="w-16 h-16 rounded-full border border-white/10 flex items-center justify-center animate-pulse">
                 <Smartphone size={32} strokeWidth={1} />
               </div>
-              <p className="text-xs tracking-widest uppercase opacity-50">Scanning Network...</p>
-              <p className="text-[10px] opacity-30 max-w-[200px]">
-                Ensure devices are on the same Wi-Fi. If not found, use the &quot;Share Link&quot; button above.
-              </p>
+              
+              <div className="space-y-2">
+                <p className="text-xs tracking-widest uppercase opacity-50">No devices found</p>
+                <p className="text-[10px] opacity-30 max-w-[200px] mx-auto">
+                  Share the link or QR code to connect instantly.
+                </p>
+              </div>
+
+              {/* Manual Connect Form */}
+              <form onSubmit={handleManualConnect} className="flex items-center gap-2 mt-4 bg-white/5 p-1 pl-4 rounded-full border border-white/10 focus-within:border-white/30 transition-colors">
+                <ScanLine size={14} className="opacity-50" />
+                <input 
+                  type="text" 
+                  value={manualId}
+                  onChange={(e) => setManualId(e.target.value)}
+                  placeholder="Enter Peer ID..."
+                  className="bg-transparent border-none outline-none text-xs w-32 placeholder:text-white/20"
+                />
+                <button 
+                  type="submit"
+                  disabled={!manualId}
+                  className="px-4 py-2 rounded-full bg-white text-black text-[10px] font-bold uppercase tracking-wider hover:bg-white/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Connect
+                </button>
+              </form>
+              
+              {myId && (
+                <div className="mt-4 p-3 rounded-xl bg-white/5 border border-white/5">
+                  <p className="text-[10px] opacity-30 uppercase tracking-widest mb-1">Your ID</p>
+                  <code className="text-xs font-mono select-all">{myId}</code>
+                </div>
+              )}
             </motion.div>
           ) : (
             peers.map((peer) => (
