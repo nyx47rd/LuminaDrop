@@ -14,21 +14,28 @@ interface PeerDevice {
   name: string;
 }
 
+interface ReceivedFile {
+  file: File;
+  from: string;
+  id: string;
+  timestamp: number;
+}
+
 interface PeerContextType {
   peers: PeerDevice[];
   myId: string;
   connectionStatus: 'connecting' | 'connected' | 'error';
   connectToPeer: (id: string) => void;
   sendFile: (to: string, file: File) => void;
-  incomingFile: { file: File; from: string } | null;
+  receivedFiles: ReceivedFile[];
   transferProgress: number;
-  setIncomingFile: (val: any) => void;
+  clearReceivedFiles: () => void;
 }
 
 const PeerContext = createContext<PeerContextType | null>(null);
 
 // ★★★ Render.com URL'ini buraya yaz ★★★
-const PEER_SERVER_HOST = 'lumina-peer.onrender.com';
+const PEER_SERVER_HOST = 'lumina-peer.yasar-123-sevda.workers.dev';
 
 function waitForPeerJS(): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -48,7 +55,7 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
   const [connectionStatus, setConnectionStatus] = useState<
     'connecting' | 'connected' | 'error'
   >('connecting');
-  const [incomingFile, setIncomingFile] = useState<any>(null);
+  const [receivedFiles, setReceivedFiles] = useState<ReceivedFile[]>([]);
   const [transferProgress, setTransferProgress] = useState(0);
 
   const peer = useRef<any>(null);
@@ -66,17 +73,27 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
           if (parsed.name && parsed.size !== undefined) {
             meta = parsed;
             chunks = [];
+            setTransferProgress(0); // Reset progress for new file
           }
         } catch {}
       } else if (data instanceof ArrayBuffer) {
         chunks.push(data);
         const received = chunks.reduce((a: number, c: ArrayBuffer) => a + c.byteLength, 0);
+        
         if (meta) {
           setTransferProgress((received / meta.size) * 100);
+          
           if (received >= meta.size) {
             const blob = new Blob(chunks, { type: meta.type });
             const file = new File([blob], meta.name, { type: meta.type });
-            setIncomingFile({ file, from: conn.peer });
+            
+            setReceivedFiles(prev => [...prev, {
+              file,
+              from: conn.peer,
+              id: Math.random().toString(36).substring(7),
+              timestamp: Date.now()
+            }]);
+            
             setTransferProgress(0);
             meta = null;
             chunks = [];
@@ -129,7 +146,7 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
         port: 443,
         path: '/',
         secure: true,
-        debug: 0,
+        debug: 1,
         config: {
           iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
@@ -240,11 +257,13 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
     [setupConn]
   );
 
+  const clearReceivedFiles = () => setReceivedFiles([]);
+
   return (
     <PeerContext.Provider
       value={{
         peers, myId, connectionStatus, connectToPeer,
-        sendFile, incomingFile, transferProgress, setIncomingFile,
+        sendFile, receivedFiles, transferProgress, clearReceivedFiles,
       }}
     >
       {children}

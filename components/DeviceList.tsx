@@ -3,14 +3,15 @@
 import React, { useState } from 'react';
 import { usePeers } from '@/hooks/use-peers';
 import { motion, AnimatePresence } from 'motion/react';
-import { Smartphone, Laptop, FileIcon, Download, X, Check, Share2, QrCode, ScanLine, RefreshCw, AlertCircle } from 'lucide-react';
+import { Smartphone, Laptop, FileIcon, Download, X, Check, Share2, QrCode, ScanLine, RefreshCw, AlertCircle, History, Trash2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 export default function DeviceList() {
-  const { peers, sendFile, transferProgress, incomingFile, setIncomingFile, myId, connectToPeer, connectionStatus } = usePeers();
+  const { peers, sendFile, transferProgress, receivedFiles, clearReceivedFiles, myId, connectToPeer, connectionStatus } = usePeers();
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [manualId, setManualId] = useState('');
+  const [showHistory, setShowHistory] = useState(false);
 
   const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}#${myId}` : '';
 
@@ -227,36 +228,48 @@ export default function DeviceList() {
       </div>
 
       <AnimatePresence>
-        {incomingFile && (
+        {receivedFiles.length > 0 && (
           <motion.div 
             initial={{ opacity: 0, y: 100 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 100 }}
-            className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-md glass p-6 rounded-[32px] shadow-2xl z-50"
+            className="fixed bottom-0 left-0 right-0 p-4 z-40 pointer-events-none"
           >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-white text-black flex items-center justify-center">
-                <FileIcon size={20} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate">{incomingFile.file.name}</p>
-                <p className="text-xs opacity-40">Incoming from {incomingFile.from.slice(0, 4)}</p>
-              </div>
-              <div className="flex gap-2">
+            <div className="max-w-md mx-auto bg-black/90 backdrop-blur-xl border border-white/10 rounded-[32px] p-6 shadow-2xl pointer-events-auto max-h-[60vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-medium flex items-center gap-2">
+                  <History size={14} />
+                  Received Files ({receivedFiles.length})
+                </h3>
                 <button 
-                  onClick={() => setIncomingFile(null)}
-                  className="p-2 rounded-full hover:bg-white/5 transition-colors"
+                  onClick={clearReceivedFiles}
+                  className="p-2 rounded-full hover:bg-white/10 transition-colors text-white/50 hover:text-red-400"
                 >
-                  <X size={20} />
+                  <Trash2 size={14} />
                 </button>
-                <a 
-                  href={URL.createObjectURL(incomingFile.file)}
-                  download={incomingFile.file.name}
-                  onClick={() => setIncomingFile(null)}
-                  className="p-2 rounded-full bg-white text-black hover:scale-110 transition-transform"
-                >
-                  <Download size={20} />
-                </a>
+              </div>
+
+              <div className="space-y-3">
+                {receivedFiles.map((item) => (
+                  <div key={item.id} className="flex items-center gap-4 p-3 rounded-2xl bg-white/5 border border-white/5">
+                    <div className="w-10 h-10 rounded-xl bg-white text-black flex items-center justify-center shrink-0">
+                      <FileIcon size={18} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{item.file.name}</p>
+                      <p className="text-[10px] opacity-40">
+                        {(item.file.size / 1024 / 1024).toFixed(2)} MB • from {item.from.slice(0, 4)}
+                      </p>
+                    </div>
+                    <a 
+                      href={URL.createObjectURL(item.file)}
+                      download={item.file.name}
+                      className="p-2 rounded-full bg-white text-black hover:scale-110 transition-transform"
+                    >
+                      <Download size={16} />
+                    </a>
+                  </div>
+                ))}
               </div>
             </div>
           </motion.div>
